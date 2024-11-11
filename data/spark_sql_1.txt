@@ -1,0 +1,66 @@
+object spark_sql_code_1 {
+  def main(args: Array[String]): Unit = {
+    // TODO 1: 创建spark环境
+    val spark: SparkSession = SparkSession.builder().master("local").appName("spark sql code").getOrCreate()
+
+    // TODO 2: 读取数据
+    val rowRDD: RDD[Row] = spark.sparkContext.textFile("datas/agent.log")
+      .map(line => {
+        val words: Array[String] = line.split(" ");
+        Row(words(1), words(2).toInt, words(3).toInt)
+      })
+
+    rowRDD.persist()
+
+    val tableRDD1: RDD[Row] = rowRDD.filter(row => {
+      row.getInt(1) % 2 == 0
+    })
+
+    val tableRDD2: RDD[Row] = rowRDD.filter(row => {
+      row.getInt(2) % 2 == 0
+    })
+
+
+    // TODO 3: 创建表结构和临时表
+    // 定义表结构
+    val df1: DataFrame = spark.sqlContext.createDataFrame(tableRDD1,
+      StructType(Seq(StructField("t1", StringType), StructField("t2", IntegerType), StructField("t3", IntegerType)))
+    )
+
+    df1.createTempView("t")
+    val sql_1: String =
+      """
+        |select t1 as t1, t2 as t2, t3 as t3, 'r' as tp from t
+        |""".stripMargin
+
+
+    // TODO 5: 执行sql
+    val result_table1: DataFrame = spark.sql(sql_1)
+
+    // TODO 6: 结果显示
+    result_table1.show()
+
+    //################
+
+    val df2: DataFrame = spark.sqlContext.createDataFrame(tableRDD2,
+      StructType(Seq(StructField("r1", StringType), StructField("r2", IntegerType), StructField("r3", IntegerType)))
+    )
+
+    df2.createTempView("r")
+
+    // TODO 4: sql逻辑
+    val sql_2: String =
+      """
+        |select r1 as t1, r2 as t2, r3 as t3, 'r' as tp from r
+        |""".stripMargin
+
+
+    // TODO 5: 执行sql
+    val result_table2: DataFrame = spark.sql(sql_2)
+
+    // TODO 6: 结果显示
+    result_table2.show()
+
+    // TODO 7: 关闭spark环境
+    spark.stop()
+  }
