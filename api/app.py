@@ -96,6 +96,39 @@ def compare_spark_code_difference(original_sql_code: str, revised_sql_code: str,
     except:
         return {'result': "```json\n\n```"}
 
+def list_table_from_spark_sql(spark_sql_code:str, llm_model:str='qwen2.5-72b-instruct'):
+    import os
+    import re
+    from openai import OpenAI
+    
+    msg = f"""Spark SQL Code: ```{spark_sql_code}```
+    requirements:
+    1. Give the result in the Json format. Only conside tables that already exist in DB or saved to DB finally.
+    'tables':
+        `row_unchanged_table`: a list of tables. These tables already exist in DB, and their rows are not changed.
+        `row_changed_table`: a list of tables, operations like deleted/updated/inserted are applied to these tables according to the sql code.
+        `created_table`: a list of tables that are newly created and save to DB or disk.
+        `deleted_table`: a list of tables that are totally deleted/dropped.
+    2. Give the json result only.
+    """
+    try:
+        client = OpenAI(
+            api_key=qwen_api_key, 
+            base_url=qwen_openai_sdk_base_url,
+        )
+        completion = client.chat.completions.create(
+            model=llm_model,
+            messages=[
+                {'role': 'system', 'content': 'You are a Spark SQL expert. Given a Spark SQL code, please help user to list tables used in the code'},
+                {'role': 'user', 'content': msg}],
+            )
+        pattern = r'```json(.*?)```'
+
+        matches = re.findall(pattern, completion.choices[0].message.content, re.DOTALL)
+        return {'result': matches[0]}
+    except:
+        return {'result': "```json\n\n```"}
+
 @app.route('/extract_data_lineage', methods=['POST'])
 def extract_table():
     data = request.get_json()
@@ -111,6 +144,14 @@ def compare_spark_code():
     revised_sql_code = data.get('revised_sql_code')
     llm_model = data.get('llm_model', 'qwen2.5-72b-instruct')
     result = compare_spark_code_difference(original_sql_code, revised_sql_code, llm_model)
+    return jsonify(result)
+
+@app.route('/list_table_from_spark_code', methods=['POST'])
+def list_table():
+    data = request.get_json()
+    spark_sql_code = data.get('spark_sql_code')
+    llm_model = data.get('llm_model', 'qwen2.5-72b-instruct')
+    result = list_table_from_spark_sql(spark_sql_code , llm_model)
     return jsonify(result)
 
 if __name__ == '__main__':
